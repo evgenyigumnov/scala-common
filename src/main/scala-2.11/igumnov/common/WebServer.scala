@@ -2,9 +2,11 @@ package igumnov.common
 
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 
+import org.eclipse.jetty.http.HttpVersion
 import org.eclipse.jetty.server.handler.{ContextHandler, ContextHandlerCollection}
-import org.eclipse.jetty.server.{Connector, Handler, ServerConnector, Server}
+import org.eclipse.jetty.server._
 import org.eclipse.jetty.servlet.{ServletHolder, ServletContextHandler, ServletHandler}
+import org.eclipse.jetty.util.ssl.SslContextFactory
 import org.eclipse.jetty.util.thread.QueuedThreadPool
 
 import scala.collection.mutable.ArrayBuffer
@@ -14,9 +16,11 @@ object WebServer {
   var threadPool: Option[QueuedThreadPool] = Option(null)
   var server: Option[Server] = Option(null)
   var connector: Option[ServerConnector] = Option(null)
+  var https: Option[ServerConnector] = Option(null)
   var handlers: ArrayBuffer[Handler] = ArrayBuffer[Handler]()
   var servletContext: Option[ServletContextHandler] = Option(null)
   var restErrorHandler: Option[(HttpServletRequest, HttpServletResponse, Exception) => JSONClass] = Option(null)
+
 
   def setPoolSize(min: Int, max: Int) {
     threadPool = Option(new QueuedThreadPool(max, min))
@@ -39,8 +43,39 @@ object WebServer {
 
   }
 
+  def https(hostName: String, port: Int, keystoreFile: String, storePassword: String, managerPassword: String) {
+    if (server.isEmpty) {
+      if (threadPool.isDefined) {
+        server = Option(new Server(threadPool.get))
+      }
+      else {
+        server = Option(new Server)
+      }
+    }
+    val http_config: HttpConfiguration = new HttpConfiguration
+    http_config.setSecureScheme("https")
+    http_config.setSecurePort(port)
+    val sslContextFactory: SslContextFactory = new SslContextFactory
+    sslContextFactory.setKeyStorePath(keystoreFile)
+    sslContextFactory.setKeyStorePassword(storePassword)
+    sslContextFactory.setKeyManagerPassword(managerPassword)
+    val https_config: HttpConfiguration = new HttpConfiguration(http_config)
+    https_config.addCustomizer(new SecureRequestCustomizer)
+    https = Option(new ServerConnector(server.get, new SslConnectionFactory(sslContextFactory, HttpVersion.HTTP_1_1.asString), new HttpConnectionFactory(https_config)))
+    https.get.setPort(port)
+    https.get.setHost(hostName)
+  }
+
   def start {
-    server.get.setConnectors(Array[Connector](connector.get))
+    if(https.isDefined && connector.isDefined) {
+      server.get.setConnectors(Array[Connector](connector.get, https.get))
+    } else {
+      if(connector.isDefined) {
+        server.get.setConnectors(Array[Connector](connector.get))
+      } else {
+        server.get.setConnectors(Array[Connector](https.get))
+      }
+    }
     val contexts: ContextHandlerCollection = new ContextHandlerCollection
     contexts.setHandlers(handlers.toArray)
     server.get.setHandler(contexts)

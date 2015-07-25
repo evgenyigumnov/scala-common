@@ -2,6 +2,7 @@ package igumnov.common
 
 import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
 
+import com.igumnov.common.WebServer
 import org.scalatest.FlatSpec
 import scala.io.Source
 
@@ -10,8 +11,9 @@ class WebServerTest extends FlatSpec {
 
   "WebServer" should "work" in {
 
-    WebServer.setPoolSize(1, 10)
+    WebServer.setPoolSize(1, 20)
     WebServer.init("localhost", 8888)
+    WebServer.https("localhost", 8889, "src/test/resources/key.jks", "storepwd", "keypwd")
 
     WebServer.addStringController("/", (rq, rs) => {
       "Hello"
@@ -40,7 +42,10 @@ class WebServerTest extends FlatSpec {
       ret
     })
     WebServer.start
+
+    URL.turnOffCertificateValidation
     assert(URL.getStringByUrl("http://localhost:8888") == "Hello")
+    assert(URL.getStringByUrl("https://localhost:8889") == "Hello")
     assert(Source.fromURL("http://localhost:8888/rest").mkString == "{\"name\":\"test\",\"value\":1}")
 
     assert(URL.getStringByUrl("http://localhost:8888/rest", "POST", Option(null), "{\"name\":\"test\",\"value\":1}")
