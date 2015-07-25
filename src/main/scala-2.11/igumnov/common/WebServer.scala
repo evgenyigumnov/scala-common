@@ -1,17 +1,28 @@
 package igumnov.common
 
+import java.io.IOException
+import java.security.Principal
+import javax.security.auth.Subject
+import javax.servlet.{ServletException, ServletRequest}
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 
+import igumnov.common.webserver.User
 import org.eclipse.jetty.http.HttpVersion
+import org.eclipse.jetty.security.MappedLoginService.{UserPrincipal, RolePrincipal, KnownUser}
+import org.eclipse.jetty.security.authentication.FormAuthenticator
+import org.eclipse.jetty.security._
 import org.eclipse.jetty.server.handler.{ContextHandler, ContextHandlerCollection}
 import org.eclipse.jetty.server._
-import org.eclipse.jetty.servlet.{ServletHolder, ServletContextHandler, ServletHandler}
+import org.eclipse.jetty.server.session.SessionHandler
+import org.eclipse.jetty.servlet.{DefaultServlet, ServletHolder, ServletContextHandler, ServletHandler}
+import org.eclipse.jetty.util.security.{Constraint, Credential}
 import org.eclipse.jetty.util.ssl.SslContextFactory
 import org.eclipse.jetty.util.thread.QueuedThreadPool
 
 import scala.collection.mutable.ArrayBuffer
 
 object WebServer {
+
 
   var threadPool: Option[QueuedThreadPool] = Option(null)
   var server: Option[Server] = Option(null)
@@ -20,6 +31,10 @@ object WebServer {
   var handlers: ArrayBuffer[Handler] = ArrayBuffer[Handler]()
   var servletContext: Option[ServletContextHandler] = Option(null)
   var restErrorHandler: Option[(HttpServletRequest, HttpServletResponse, Exception) => JSONClass] = Option(null)
+  var loginService: Option[LoginService] = Option(null)
+  var securityHandler: Option[ConstraintSecurityHandler] = Option(null)
+  var sessionHandler: Option[SessionHandler] = Option(null)
+
 
 
   def setPoolSize(min: Int, max: Int) {
@@ -67,10 +82,10 @@ object WebServer {
   }
 
   def start {
-    if(https.isDefined && connector.isDefined) {
+    if (https.isDefined && connector.isDefined) {
       server.get.setConnectors(Array[Connector](connector.get, https.get))
     } else {
-      if(connector.isDefined) {
+      if (connector.isDefined) {
         server.get.setConnectors(Array[Connector](connector.get))
       } else {
         server.get.setConnectors(Array[Connector](https.get))
@@ -87,6 +102,109 @@ object WebServer {
     server.get.join
 
   }
+
+  def loginService(f: (String) => Option[User]) {
+
+    object service extends LoginService {
+
+      var identityService: IdentityService = new DefaultIdentityService
+
+      override def setIdentityService(i: IdentityService) = {
+        identityService = i
+      }
+
+      override def getIdentityService: IdentityService = {
+        identityService
+      }
+
+      override def getName: String = {
+        "Custom"
+      }
+
+      override def validate(user: UserIdentity): Boolean = {
+        val u = f.apply(user.getUserPrincipal.getName)
+        u.isDefined
+      }
+
+      override def logout(user: UserIdentity) = {}
+
+      override def login(username: String, credentials: scala.Any, request: ServletRequest): UserIdentity = {
+        val user = f.apply(username)
+        if(user.isDefined) {
+          val pwd = user.get.password
+          val roles = user.get.roles
+          val userPrincipal = new KnownUser(username, Credential.getCredential(pwd))
+          val subject = new Subject
+          subject.getPrincipals.add(userPrincipal)
+          subject.getPrivateCredentials.add(Credential.getCredential(credentials.toString))
+
+          if(roles.isDefined) {
+            roles.get.foreach(r => {
+              subject.getPrincipals.add(new RolePrincipal(r))
+            })
+          }
+          subject.setReadOnly
+          val identity: UserIdentity = identityService.newUserIdentity(subject, userPrincipal, roles.get)
+          val principal = identity.getUserPrincipal.asInstanceOf[UserPrincipal]
+          if (principal.authenticate(credentials)) {
+            return identity
+          }
+        }
+        null
+      }
+    }
+    loginService = Option(service)
+  }
+
+
+
+  def securityPages(loginPage: String, loginErrorPage: String, logoutPage: String) = {
+    securityHandler = Option(new ConstraintSecurityHandler)
+    securityHandler.get.setLoginService(loginService.get)
+    val authenticator:FormAuthenticator = new FormAuthenticator(loginPage, loginErrorPage, false)
+    securityHandler.get.setAuthenticator(authenticator)
+    servletContext = Option(new ServletContextHandler(ServletContextHandler.SESSIONS | ServletContextHandler.SECURITY))
+    servletContext.get.setSecurityHandler(securityHandler.get)
+    if(sessionHandler.isDefined)
+    servletContext.get.setSessionHandler(sessionHandler.get)
+
+    servletContext.get.addServlet(new ServletHolder(new DefaultServlet() {
+      protected override def doGet(request: HttpServletRequest, response: HttpServletResponse) {
+        request.getSession.invalidate
+        response.sendRedirect(response.encodeRedirectURL(loginPage))
+      }
+    }), logoutPage)
+
+    handlers+= servletContext.get
+  }
+
+
+  def addAllowRule(path: String) = {
+    val constraint: Constraint = new Constraint
+    constraint.setName(Constraint.__FORM_AUTH)
+
+    constraint.setAuthenticate(false)
+
+    val constraintMapping: ConstraintMapping = new ConstraintMapping
+    constraintMapping.setConstraint(constraint)
+    constraintMapping.setPathSpec(path)
+    securityHandler.get.addConstraintMapping(constraintMapping)
+  }
+
+  def addRestrictRule(path: String, roles: Array[String]) = {
+    val constraint: Constraint = new Constraint
+    constraint.setName(Constraint.__FORM_AUTH)
+
+    constraint.setRoles(roles)
+    constraint.setAuthenticate(true)
+
+    val constraintMapping: ConstraintMapping = new ConstraintMapping
+    constraintMapping.setConstraint(constraint)
+    constraintMapping.setPathSpec(path)
+
+    securityHandler.get.addConstraintMapping(constraintMapping)
+  }
+
 
   private def addServlet(s: HttpServlet, name: String) {
     if (servletContext.isEmpty) {
@@ -133,6 +251,7 @@ object WebServer {
   def addRestController[T: Manifest](path: String, f: (HttpServletRequest, HttpServletResponse, Option[T]) => T) = {
     object RestServlet extends HttpServlet {
       var ret: T = _
+
       override def doGet(request: HttpServletRequest, response: HttpServletResponse) = {
         try {
           if (List("POST", "PUT") contains request.getMethod) {
@@ -155,9 +274,9 @@ object WebServer {
 
         } catch {
           case e: Exception => {
-            if(restErrorHandler.isDefined) {
+            if (restErrorHandler.isDefined) {
               response.setStatus(HttpServletResponse.SC_BAD_REQUEST)
-              response.getWriter().print(JSON.toJson(restErrorHandler.get.apply(request,response,e)))
+              response.getWriter().print(JSON.toJson(restErrorHandler.get.apply(request, response, e)))
             }
           }
         }
