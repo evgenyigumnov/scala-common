@@ -11,10 +11,10 @@ Example of usage
       var name: String = _
       var value: Int = _
     }
+    object SampleEntity extends SampleEntity
 
     // File: usage.scala
     import igumnov.common._
-    object SampleEntity extends SampleEntity
     val jsonString = """{ "name": "JSON source", "value": 1 }"""
     val myObject = SampleEntity.fromJson(jsonString)
     val myObject2 = new SampleEntity()
