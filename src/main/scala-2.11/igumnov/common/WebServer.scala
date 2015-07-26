@@ -41,7 +41,7 @@ object WebServer {
   var sessionHandler: Option[SessionHandler] = Option(null)
   var localeLangs: Option[Map[String, String]] = Option(null)
   var localeInterceptor: Option[(HttpServletRequest, HttpServletResponse) => String] = Option(null)
-  var templateEngines: Option[Map[String, TemplateEngine]] =  Option(null)
+  var templateEngines: Option[Map[String, TemplateEngine]] = Option(null)
   var templateEngine: Option[TemplateEngine] = Option(null)
   var resolvers: Option[Map[String, MessageResolver]] = Option(null)
 
@@ -335,7 +335,7 @@ object WebServer {
     object StringServlet extends HttpServlet {
       override def doGet(request: HttpServletRequest, response: HttpServletResponse) = {
         var model = collection.mutable.Map[String, AnyRef]()
-        val action = f.apply(request, response,model)
+        val action = f.apply(request, response, model)
 
         response.setHeader("Cache-Control", "no-store")
         response.setHeader("Pragma", "no-cache")
@@ -343,14 +343,14 @@ object WebServer {
         if (action.startsWith("redirect:")) {
           response.sendRedirect(response.encodeRedirectURL(action.substring(9)))
         } else {
-          var javaModel =  new java.util.HashMap[String,AnyRef] ()
-          model.foreach( m => {
+          var javaModel = new java.util.HashMap[String, AnyRef]()
+          model.foreach(m => {
             javaModel.put(m._1, m._2)
           })
           val context: IContext = new ControllerContext(javaModel, request.getServletContext)
           var engine: TemplateEngine = null
-          if(templateEngines.isDefined) {
-            engine = templateEngines.get.get(localeInterceptor.get.apply(request,response)).get
+          if (templateEngines.isDefined) {
+            engine = templateEngines.get.get(localeInterceptor.get.apply(request, response)).get
           } else {
             engine = templateEngine.get
           }
@@ -385,9 +385,20 @@ object WebServer {
     localeInterceptor = Option(interceptor)
   }
 
+  def getMessage(request: HttpServletRequest, response: HttpServletResponse, messageKey: String, params: Option[List[String]]): String = {
+    val resolver: MessageResolver = resolvers.get.get(localeInterceptor.get.apply(request, response)).get
+    if (params.isDefined) {
+      val messageParameters: Array[AnyRef] = params.get.toArray
+      resolver.resolveMessage(null, messageKey, messageParameters).getResolvedMessage
+    } else {
+      resolver.resolveMessage(null, messageKey, null).getResolvedMessage
+
+    }
+  }
+
   def templates(folder: String, cacheTTL: Double) = {
 
-    if(localeLangs.isDefined) {
+    if (localeLangs.isDefined) {
       var engines = collection.mutable.Map[String, TemplateEngine]()
       var tmpResolvers = collection.mutable.Map[String, MessageResolver]()
       localeLangs.get.foreach((lang) => {
@@ -417,7 +428,7 @@ object WebServer {
       templateResolver.setCharacterEncoding("UTF-8")
       val engine: TemplateEngine = new TemplateEngine
       engine.setTemplateResolver(templateResolver)
-      templateEngine=Option(engine)
+      templateEngine = Option(engine)
     }
     servletContext.get.setResourceBase(folder)
   }

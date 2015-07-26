@@ -4,7 +4,7 @@ import java.util
 
 import com.igumnov.common.{ URL => cURL}
 
-object URL {
+object URLOps {
     def turnOffCertificateValidation {
       cURL.turnOffCertificateValidation()
     }

@@ -68,7 +68,8 @@ class WebServerTest extends FlatSpec {
 
 
     FolderOps.createIfNotExists("tmp")
-    FileOps.writeString("hello.world=Hello world", "tmp/locale_en.properties")
+    FileOps.writeString("hello.world=Hello world\n", "tmp/locale_en.properties")
+    FileOps.appendLine("params=1{0}", "tmp/locale_en.properties")
     FileOps.writeString("hello.world=Привет мир", "tmp/locale_ru.properties")
 
     val langs = Map[String, String]("ru" -> "tmp/locale_ru.properties",
@@ -85,19 +86,29 @@ class WebServerTest extends FlatSpec {
       model += "varName" -> "123"
       "example"
     })
+    WebServer.addController("/lang", (rq, rs, model) => {
+      model += "varName" -> WebServer.getMessage(rq,rs,"hello.world",Option(null))
+      "example"
+    })
 
-
+    WebServer.addController("/param", (rq, rs, model) => {
+      model += "varName" -> WebServer.getMessage(rq,rs,"params",Option(List[String]("2")))
+      "example"
+    })
     WebServer.start
+    //WebServer.join
 
-    URL.turnOffCertificateValidation
-    assert(URL.getStringByUrl("http://localhost:8888/index") == "<html><head></head><body><span>123</span><span>Hello world</span></body></html>")
-    assert(URL.getStringByUrl("http://localhost:8888") == "Hello")
-    assert(URL.getStringByUrl("https://localhost:8889") == "Hello")
+    URLOps.turnOffCertificateValidation
+    assert(URLOps.getStringByUrl("http://localhost:8888/param") == "<html><head></head><body><span>12</span><span>Hello world</span></body></html>")
+    assert(URLOps.getStringByUrl("http://localhost:8888/lang") == "<html><head></head><body><span>Hello world</span><span>Hello world</span></body></html>")
+    assert(URLOps.getStringByUrl("http://localhost:8888/index") == "<html><head></head><body><span>123</span><span>Hello world</span></body></html>")
+    assert(URLOps.getStringByUrl("http://localhost:8888") == "Hello")
+    assert(URLOps.getStringByUrl("https://localhost:8889") == "Hello")
     assert(Source.fromURL("http://localhost:8888/rest").mkString == "{\"name\":\"test\",\"value\":1}")
 
-    assert(URL.getStringByUrl("http://localhost:8888/rest", "POST", Option(null), "{\"name\":\"test\",\"value\":1}")
+    assert(URLOps.getStringByUrl("http://localhost:8888/rest", "POST", Option(null), "{\"name\":\"test\",\"value\":1}")
       == "{\"name\":\"test\",\"value\":1}")
-
     //WebServer.join
+
   }
 }
