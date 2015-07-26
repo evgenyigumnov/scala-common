@@ -67,10 +67,30 @@ class WebServerTest extends FlatSpec {
     })
 
 
+    FolderOps.createIfNotExists("tmp")
+    FileOps.writeString("hello.world=Hello world", "tmp/locale_en.properties")
+    FileOps.writeString("hello.world=Привет мир", "tmp/locale_ru.properties")
+
+    val langs = Map[String, String]("ru" -> "tmp/locale_ru.properties",
+      "en" -> "tmp/locale_en.properties")
+
+    WebServer.locale(langs, (rq,rs)=>{
+      "en"
+    })
+
+    WebServer.templates("tmp",0)
+
+    FileOps.writeString("<html><body><span th:text=\"${varName}\"></span><span th:text=\"#{hello.world}\"></span></body><html>", "tmp/example.html")
+    WebServer.addController("/index", (rq, rs, model) => {
+      model += "varName" -> "123"
+      "example"
+    })
+
 
     WebServer.start
 
     URL.turnOffCertificateValidation
+    assert(URL.getStringByUrl("http://localhost:8888/index") == "<html><head></head><body><span>123</span><span>Hello world</span></body></html>")
     assert(URL.getStringByUrl("http://localhost:8888") == "Hello")
     assert(URL.getStringByUrl("https://localhost:8889") == "Hello")
     assert(Source.fromURL("http://localhost:8888/rest").mkString == "{\"name\":\"test\",\"value\":1}")
@@ -78,6 +98,6 @@ class WebServerTest extends FlatSpec {
     assert(URL.getStringByUrl("http://localhost:8888/rest", "POST", Option(null), "{\"name\":\"test\",\"value\":1}")
       == "{\"name\":\"test\",\"value\":1}")
 
-    WebServer.join
+    //WebServer.join
   }
 }

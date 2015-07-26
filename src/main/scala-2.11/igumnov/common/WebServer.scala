@@ -6,7 +6,9 @@ import javax.security.auth.Subject
 import javax.servlet.{ServletException, ServletRequest}
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 
+import com.igumnov.common.webserver.{ControllerContext, MessageResolver}
 import igumnov.common.webserver.User
+import nz.net.ultraq.thymeleaf.LayoutDialect
 import org.eclipse.jetty.http.HttpVersion
 import org.eclipse.jetty.security.MappedLoginService.{UserPrincipal, RolePrincipal, KnownUser}
 import org.eclipse.jetty.security.authentication.FormAuthenticator
@@ -18,6 +20,9 @@ import org.eclipse.jetty.servlet.{DefaultServlet, ServletHolder, ServletContextH
 import org.eclipse.jetty.util.security.{Constraint, Credential}
 import org.eclipse.jetty.util.ssl.SslContextFactory
 import org.eclipse.jetty.util.thread.QueuedThreadPool
+import org.thymeleaf.TemplateEngine
+import org.thymeleaf.context.IContext
+import org.thymeleaf.templateresolver.ServletContextTemplateResolver
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -34,8 +39,11 @@ object WebServer {
   var loginService: Option[LoginService] = Option(null)
   var securityHandler: Option[ConstraintSecurityHandler] = Option(null)
   var sessionHandler: Option[SessionHandler] = Option(null)
-
-
+  var localeLangs: Option[Map[String, String]] = Option(null)
+  var localeInterceptor: Option[(HttpServletRequest, HttpServletResponse) => String] = Option(null)
+  var templateEngines: Option[Map[String, TemplateEngine]] =  Option(null)
+  var templateEngine: Option[TemplateEngine] = Option(null)
+  var resolvers: Option[Map[String, MessageResolver]] = Option(null)
 
   def setPoolSize(min: Int, max: Int) {
     threadPool = Option(new QueuedThreadPool(max, min))
@@ -130,7 +138,7 @@ object WebServer {
 
       override def login(username: String, credentials: scala.Any, request: ServletRequest): UserIdentity = {
         val user = f.apply(username)
-        if(user.isDefined) {
+        if (user.isDefined) {
           val pwd = user.get.password
           val roles = user.get.roles
           val userPrincipal = new KnownUser(username, Credential.getCredential(pwd))
@@ -138,7 +146,7 @@ object WebServer {
           subject.getPrincipals.add(userPrincipal)
           subject.getPrivateCredentials.add(Credential.getCredential(credentials.toString))
 
-          if(roles.isDefined) {
+          if (roles.isDefined) {
             roles.get.foreach(r => {
               subject.getPrincipals.add(new RolePrincipal(r))
             })
@@ -157,16 +165,15 @@ object WebServer {
   }
 
 
-
   def securityPages(loginPage: String, loginErrorPage: String, logoutPage: String) = {
     securityHandler = Option(new ConstraintSecurityHandler)
     securityHandler.get.setLoginService(loginService.get)
-    val authenticator:FormAuthenticator = new FormAuthenticator(loginPage, loginErrorPage, false)
+    val authenticator: FormAuthenticator = new FormAuthenticator(loginPage, loginErrorPage, false)
     securityHandler.get.setAuthenticator(authenticator)
     servletContext = Option(new ServletContextHandler(ServletContextHandler.SESSIONS | ServletContextHandler.SECURITY))
     servletContext.get.setSecurityHandler(securityHandler.get)
-    if(sessionHandler.isDefined)
-    servletContext.get.setSessionHandler(sessionHandler.get)
+    if (sessionHandler.isDefined)
+      servletContext.get.setSessionHandler(sessionHandler.get)
 
     servletContext.get.addServlet(new ServletHolder(new DefaultServlet() {
       protected override def doGet(request: HttpServletRequest, response: HttpServletResponse) {
@@ -175,7 +182,7 @@ object WebServer {
       }
     }), logoutPage)
 
-    handlers+= servletContext.get
+    handlers += servletContext.get
   }
 
 
@@ -322,6 +329,99 @@ object WebServer {
     }
     addServlet(StringServlet, path)
   }
+
+  def addController(page: String, f: (HttpServletRequest, HttpServletResponse, collection.mutable.Map[String, AnyRef]) => String) = {
+
+    object StringServlet extends HttpServlet {
+      override def doGet(request: HttpServletRequest, response: HttpServletResponse) = {
+        var model = collection.mutable.Map[String, AnyRef]()
+        val action = f.apply(request, response,model)
+
+        response.setHeader("Cache-Control", "no-store")
+        response.setHeader("Pragma", "no-cache")
+        response.setDateHeader("Expires", 0)
+        if (action.startsWith("redirect:")) {
+          response.sendRedirect(response.encodeRedirectURL(action.substring(9)))
+        } else {
+          var javaModel =  new java.util.HashMap[String,AnyRef] ()
+          model.foreach( m => {
+            javaModel.put(m._1, m._2)
+          })
+          val context: IContext = new ControllerContext(javaModel, request.getServletContext)
+          var engine: TemplateEngine = null
+          if(templateEngines.isDefined) {
+            engine = templateEngines.get.get(localeInterceptor.get.apply(request,response)).get
+          } else {
+            engine = templateEngine.get
+          }
+          val ret = engine.process(action, context)
+          response.setContentType("text/html; charset=utf-8")
+          response.setCharacterEncoding("UTF-8")
+          response.setStatus(HttpServletResponse.SC_OK)
+          val out = response.getWriter()
+          out.write(ret)
+        }
+      }
+
+      override def doPost(request: HttpServletRequest, response: HttpServletResponse) = {
+        doGet(request, response)
+      }
+
+      override def doPut(request: HttpServletRequest, response: HttpServletResponse) = {
+        doGet(request, response)
+      }
+
+      override def doDelete(request: HttpServletRequest, response: HttpServletResponse) = {
+        doGet(request, response)
+      }
+
+
+    }
+    addServlet(StringServlet, page)
+  }
+
+  def locale(langs: Map[String, String], interceptor: (HttpServletRequest, HttpServletResponse) => String) = {
+    localeLangs = Option(langs)
+    localeInterceptor = Option(interceptor)
+  }
+
+  def templates(folder: String, cacheTTL: Double) = {
+
+    if(localeLangs.isDefined) {
+      var engines = collection.mutable.Map[String, TemplateEngine]()
+      var tmpResolvers = collection.mutable.Map[String, MessageResolver]()
+      localeLangs.get.foreach((lang) => {
+        val templateResolver: ServletContextTemplateResolver = new ServletContextTemplateResolver
+        templateResolver.setTemplateMode("LEGACYHTML5")
+        templateResolver.setPrefix("/")
+        templateResolver.setSuffix(".html")
+        templateResolver.setCacheTTLMs((cacheTTL * 1000).toLong)
+        templateResolver.setCharacterEncoding("UTF-8")
+        val engine: TemplateEngine = new TemplateEngine
+        engine.setTemplateResolver(templateResolver)
+        val localeFile: String = lang._2
+        val resolver: MessageResolver = new MessageResolver(localeFile)
+        engine.addMessageResolver(resolver)
+        tmpResolvers += lang._1 -> resolver
+        engine.addDialect(new LayoutDialect)
+        engines += lang._1 -> engine
+      })
+      templateEngines = Option(engines.toMap)
+      resolvers = Option(tmpResolvers.toMap)
+    } else {
+      val templateResolver: ServletContextTemplateResolver = new ServletContextTemplateResolver
+      templateResolver.setTemplateMode("LEGACYHTML5")
+      templateResolver.setPrefix("/")
+      templateResolver.setSuffix(".html")
+      templateResolver.setCacheTTLMs((cacheTTL * 1000).toLong)
+      templateResolver.setCharacterEncoding("UTF-8")
+      val engine: TemplateEngine = new TemplateEngine
+      engine.setTemplateResolver(templateResolver)
+      templateEngine=Option(engine)
+    }
+    servletContext.get.setResourceBase(folder)
+  }
+
 
 }
 
