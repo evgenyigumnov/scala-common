@@ -1,12 +1,12 @@
 # scala-common
 Common Scala Library
 
-    libraryDependencies += "igumnov.common" % "scala-common" % "0.1"
+    libraryDependencies += "com.igumnov.scala" % "scala-common" % "0.1"
 
 Example of usage
 
     // File: SampleEntity.scala
-    import igumnov.common._
+    import com.igumnov.scala._
     class SampleEntity extends JSON [SampleEntity]{
       var name: String = _
       var value: Int = _
@@ -14,7 +14,7 @@ Example of usage
     object SampleEntity extends SampleEntity
 
     // File: usage.scala
-    import igumnov.common._
+    import com.igumnov.scala._
     val jsonString = """{ "name": "JSON source", "value": 1 }"""
     val myObject = SampleEntity.fromJson(jsonString)
     val myObject2 = new SampleEntity()
