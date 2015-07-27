@@ -2,7 +2,6 @@ package igumnov.common
 
 import javax.servlet.http.{HttpServletResponse, HttpServletRequest}
 
-import com.igumnov.common.WebServer
 import igumnov.common.webserver.User
 import org.scalatest.FlatSpec
 import scala.io.Source

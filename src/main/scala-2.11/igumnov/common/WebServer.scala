@@ -1,6 +1,7 @@
 package igumnov.common
 
 import java.io.IOException
+import java.net.MalformedURLException
 import java.security.Principal
 import javax.security.auth.Subject
 import javax.servlet.{ServletException, ServletRequest}
@@ -13,10 +14,11 @@ import org.eclipse.jetty.http.HttpVersion
 import org.eclipse.jetty.security.MappedLoginService.{UserPrincipal, RolePrincipal, KnownUser}
 import org.eclipse.jetty.security.authentication.FormAuthenticator
 import org.eclipse.jetty.security._
-import org.eclipse.jetty.server.handler.{ContextHandler, ContextHandlerCollection}
+import org.eclipse.jetty.server.handler.{ResourceHandler, ContextHandler, ContextHandlerCollection}
 import org.eclipse.jetty.server._
 import org.eclipse.jetty.server.session.SessionHandler
 import org.eclipse.jetty.servlet.{DefaultServlet, ServletHolder, ServletContextHandler, ServletHandler}
+import org.eclipse.jetty.util.resource.Resource
 import org.eclipse.jetty.util.security.{Constraint, Credential}
 import org.eclipse.jetty.util.ssl.SslContextFactory
 import org.eclipse.jetty.util.thread.QueuedThreadPool
@@ -108,6 +110,11 @@ object WebServer {
 
   def join {
     server.get.join
+
+  }
+
+  def stop {
+    server.get.stop
 
   }
 
@@ -223,7 +230,7 @@ object WebServer {
   }
 
   def addStringController(path: String, f: (HttpServletRequest, HttpServletResponse) => String) = {
-    object StringServlet extends HttpServlet {
+    object StringServlet extends OverrideServlet {
       override def doGet(request: HttpServletRequest, response: HttpServletResponse) = {
         response.setHeader("Cache-Control", "no-store")
         response.setHeader("Pragma", "no-cache")
@@ -231,18 +238,6 @@ object WebServer {
         response.setContentType("text/html")
         response.setStatus(HttpServletResponse.SC_OK)
         response.getWriter().print(f.apply(request, response))
-      }
-
-      override def doPost(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
-      }
-
-      override def doPut(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
-      }
-
-      override def doDelete(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
       }
 
 
@@ -256,7 +251,9 @@ object WebServer {
   }
 
   def addRestController[T: Manifest](path: String, f: (HttpServletRequest, HttpServletResponse, Option[T]) => T) = {
-    object RestServlet extends HttpServlet {
+
+
+    object RestServlet extends OverrideServlet {
       var ret: T = _
 
       override def doGet(request: HttpServletRequest, response: HttpServletResponse) = {
@@ -289,17 +286,6 @@ object WebServer {
         }
       }
 
-      override def doPost(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
-      }
-
-      override def doPut(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
-      }
-
-      override def doDelete(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
-      }
 
     }
     addServlet(RestServlet, path)
@@ -308,21 +294,9 @@ object WebServer {
 
 
   def addServletController(path: String, f: (HttpServletRequest, HttpServletResponse) => Unit) = {
-    object StringServlet extends HttpServlet {
+    object StringServlet extends OverrideServlet {
       override def doGet(request: HttpServletRequest, response: HttpServletResponse) = {
         f.apply(request, response)
-      }
-
-      override def doPost(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
-      }
-
-      override def doPut(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
-      }
-
-      override def doDelete(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
       }
 
 
@@ -332,7 +306,7 @@ object WebServer {
 
   def addController(page: String, f: (HttpServletRequest, HttpServletResponse, collection.mutable.Map[String, AnyRef]) => String) = {
 
-    object StringServlet extends HttpServlet {
+    object StringServlet extends OverrideServlet {
       override def doGet(request: HttpServletRequest, response: HttpServletResponse) = {
         var model = collection.mutable.Map[String, AnyRef]()
         val action = f.apply(request, response, model)
@@ -361,18 +335,6 @@ object WebServer {
           val out = response.getWriter()
           out.write(ret)
         }
-      }
-
-      override def doPost(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
-      }
-
-      override def doPut(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
-      }
-
-      override def doDelete(request: HttpServletRequest, response: HttpServletResponse) = {
-        doGet(request, response)
       }
 
 
@@ -433,7 +395,50 @@ object WebServer {
     servletContext.get.setResourceBase(folder)
   }
 
+  def addClassPathHandler(name: String, classPath: String) {
+    val context: ContextHandler = new ContextHandler
+    context.setContextPath(name)
+    val rh: ResourceHandler = new ResourceHandler() {
+      override def getResource(path: String): Resource = {
+        var resource: Resource = Resource.newClassPathResource(path)
+        if (resource == null || !resource.exists) {
+          resource = Resource.newClassPathResource(classPath + path)
+        }
+        return resource
+      }
+    }
+    rh.setDirectoriesListed(true)
+    rh.setResourceBase("/")
+    context.setHandler(rh)
+    handlers+= context
+  }
+
+  def addStaticContentHandler(name: String, folder: String) {
+    val context: ContextHandler = new ContextHandler
+    context.setContextPath(name)
+    val rh: ResourceHandler = new ResourceHandler
+    rh.setDirectoriesListed(true)
+    rh.setResourceBase(folder)
+    context.setHandler(rh)
+    handlers+=context
+  }
+
+
 
 }
 
+class OverrideServlet extends HttpServlet {
+  override def doPost(request: HttpServletRequest, response: HttpServletResponse) = {
+    doGet(request, response)
+  }
 
+  override def doPut(request: HttpServletRequest, response: HttpServletResponse) = {
+    doGet(request, response)
+  }
+
+  override def doDelete(request: HttpServletRequest, response: HttpServletResponse) = {
+    doGet(request, response)
+  }
+
+
+}
