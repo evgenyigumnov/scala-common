@@ -2,7 +2,7 @@ import sbt.ExclusionRule
 
 name := "scala-common"
 
-organization := "com.igumnov.common"
+organization := "com.igumnov.scala"
 
 version := "0.1"
 
