@@ -18,3 +18,5 @@ libraryDependencies += "com.fasterxml.jackson.module" % "jackson-module-scala_2.
 libraryDependencies += "org.eclipse.jetty" % "jetty-server" % "9.3.1.v20150714"
 libraryDependencies += "org.eclipse.jetty" % "jetty-servlet" % "9.3.1.v20150714"
 libraryDependencies += "org.eclipse.jetty" % "jetty-security" % "9.3.1.v20150714"
+libraryDependencies += "com.h2database" % "h2" % "1.4.187" % "test"
+
