@@ -6,7 +6,8 @@ Common Scala Library
 JSON usage
 
     // File: SampleEntity.scala
-    import com.igumnov.scala._
+    import com.igumnov.scala.JSON
+    import com.igumnov.scala.JSON._
     class SampleEntity extends JSON [SampleEntity]{
       var name: String = _
       var value: Int = _
@@ -21,8 +22,8 @@ JSON usage
     myObject2.name="Some name"
     myObject2.value=100
     val jsonString2 = myObject2.toJson
-    val jsonStringArray =  JSON.toJson(Array(myObject,myObject2))
-    val exampleArray = JSON.fromJson[Array[SampleEntity]](jsonStringArray)
+    val jsonStringArray =  toJson(Array(myObject,myObject2))
+    val exampleArray = fromJson[Array[SampleEntity]](jsonStringArray)
 
 
 WebServer usage
