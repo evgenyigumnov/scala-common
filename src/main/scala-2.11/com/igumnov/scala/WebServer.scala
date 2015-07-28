@@ -37,7 +37,7 @@ object WebServer {
   var https: Option[ServerConnector] = Option(null)
   var handlers: ArrayBuffer[Handler] = ArrayBuffer[Handler]()
   var servletContext: Option[ServletContextHandler] = Option(null)
-  var restErrorHandler: Option[(HttpServletRequest, HttpServletResponse, Exception) => JSONClass] = Option(null)
+  var restErrorHandler: Option[(HttpServletRequest, HttpServletResponse, Exception) => AnyRef] = Option(null)
   var loginService: Option[LoginService] = Option(null)
   var securityHandler: Option[ConstraintSecurityHandler] = Option(null)
   var sessionHandler: Option[SessionHandler] = Option(null)
@@ -153,13 +153,11 @@ object WebServer {
           subject.getPrincipals.add(userPrincipal)
           subject.getPrivateCredentials.add(Credential.getCredential(credentials.toString))
 
-          if (roles.isDefined) {
-            roles.get.foreach(r => {
+            roles.foreach(r => {
               subject.getPrincipals.add(new RolePrincipal(r))
             })
-          }
           subject.setReadOnly
-          val identity: UserIdentity = identityService.newUserIdentity(subject, userPrincipal, roles.get)
+          val identity: UserIdentity = identityService.newUserIdentity(subject, userPrincipal, roles)
           val principal = identity.getUserPrincipal.asInstanceOf[UserPrincipal]
           if (principal.authenticate(credentials)) {
             return identity
@@ -246,15 +244,15 @@ object WebServer {
   }
 
 
-  def addRestErrorHandler(f: (HttpServletRequest, HttpServletResponse, Exception) => JSONClass) = {
+  def addRestErrorHandler(f: (HttpServletRequest, HttpServletResponse, Exception) => AnyRef) = {
     restErrorHandler = Option(f)
   }
 
-  def addRestController[T: Manifest](path: String, f: (HttpServletRequest, HttpServletResponse, Option[T]) => T) = {
+  def addRestController[T: Manifest](path: String, f: (HttpServletRequest, HttpServletResponse, Option[T]) => AnyRef) = {
 
 
     object RestServlet extends OverrideServlet {
-      var ret: T = _
+      var ret: AnyRef = _
 
       override def doGet(request: HttpServletRequest, response: HttpServletResponse) = {
         try {
@@ -423,6 +421,9 @@ object WebServer {
     handlers+=context
   }
 
+  def crypthPassword (userName: String, userPassword: String) : String = {
+    Credential.Crypt.crypt(userName, userPassword)
+  }
 
 
 }

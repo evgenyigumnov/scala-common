@@ -18,7 +18,7 @@ class WebServerTest extends FlatSpec {
 
     WebServer.loginService((name) => {
       if (name == "admin") {
-        Option(new User("admin", "CRYPT:adpexzg3FUZAk", Option(Array[String]("user"))))
+        Option(new User("admin", "CRYPT:adpexzg3FUZAk", Array[String]("user")))
       } else {
         Option(null)
       }

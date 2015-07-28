@@ -4,7 +4,7 @@ name := "scala-common"
 
 organization := "com.igumnov.scala"
 
-version := "0.2"
+version := "0.5"
 
 scalaVersion := "2.11.7"
 
