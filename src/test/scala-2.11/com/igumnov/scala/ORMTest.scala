@@ -26,6 +26,15 @@ class ORMTest extends FlatSpec {
       obj = insert[ObjectDTO](obj)
       val ret = findOne[ObjectDTO](obj.id)
       assert(ret.get.name == "aaa")
+
+      obj.name="b"
+      update[ObjectDTO](obj)
+
+      val ret2 = findOne[ObjectDTO](obj.id)
+      assert(ret2.get.name == "b")
+      ret2.get.name="aaa"
+      update[ObjectDTO](ret2.get)
+
       val retList = findAll[ObjectDTO]
       assert(retList.head.name == "aaa")
       val retList2 = findBy[ObjectDTO]("name=?","aaa")

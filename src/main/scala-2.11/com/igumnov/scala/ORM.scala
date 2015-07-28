@@ -95,6 +95,17 @@ object ORM {
   }
 
 
+  def update[T](obj: Any): T ={
+    val threadName = Thread.currentThread().getName
+    val transaction = threadTransactions.get(threadName)
+    if(transaction.isDefined) {
+      transaction.get.update(obj).asInstanceOf[T]
+    } else {
+      JavaORM.update(obj).asInstanceOf[T]
+    }
+  }
+
+
   def insert[T](obj: Any): T ={
     val threadName = Thread.currentThread().getName
     val transaction = threadTransactions.get(threadName)
