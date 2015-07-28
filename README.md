@@ -1,7 +1,7 @@
 # scala-common
 Common Scala Library
 
-    libraryDependencies += "com.igumnov.scala" % "scala-common_2.11" % "0.2"
+    libraryDependencies += "com.igumnov.scala" % "scala-common_2.11" % "0.5"
 
 JSON usage
 
