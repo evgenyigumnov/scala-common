@@ -6,6 +6,7 @@ import ORM._
 
 class ORMTest extends FlatSpec {
 
+
   "ORM" should "work" in {
 
     FolderOps.createIfNotExists("tmp")
@@ -21,10 +22,18 @@ class ORMTest extends FlatSpec {
 
     transaction {
       var obj = new ObjectDTO()
-      obj.name="aaa"
-      obj = ORM.insert[ObjectDTO](obj)
-      val ret = ORM.findOne[ObjectDTO](obj.id)
-      assert(ret.get.name== "aaa")
+      obj.name = "aaa"
+      obj = insert[ObjectDTO](obj)
+      val ret = findOne[ObjectDTO](obj.id)
+      assert(ret.get.name == "aaa")
+      val retList = findAll[ObjectDTO]
+      assert(retList.head.name == "aaa")
+      val retList2 = findBy[ObjectDTO]("name=?","aaa")
+      assert(retList2.head.name == "aaa")
+      delete(obj)
+      val emptyList = findAll[ObjectDTO]
+      assert(emptyList.size == 0)
+
     }
 
   }

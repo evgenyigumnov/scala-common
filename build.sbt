@@ -8,7 +8,7 @@ version := "0.1"
 
 scalaVersion := "2.11.7"
 
-libraryDependencies += "com.igumnov" % "common" % "9.3" excludeAll(
+libraryDependencies += "com.igumnov" % "common" % "9.4" excludeAll(
   ExclusionRule(organization = "org.eclipse.jetty"),
   ExclusionRule(organization = "com.fasterxml.jackson"),
   ExclusionRule(organization = "org.scala-lang.modules"))

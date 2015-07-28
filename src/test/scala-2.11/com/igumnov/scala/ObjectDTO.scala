@@ -1,8 +1,6 @@
 package com.igumnov.scala
 
-import com.igumnov.common.orm.Id
-
-//import com.igumnov.scala.orm.Id
+import com.igumnov.scala.orm.Id
 
 
 class ObjectDTO {
