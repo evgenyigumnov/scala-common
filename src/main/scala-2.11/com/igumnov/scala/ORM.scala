@@ -16,7 +16,7 @@ import scala.reflect.ClassTag
 object ORM {
   JavaORM.setIdClass(classOf[Id])
 
-  var threadTransactions = Map[String, Transaction]()
+  val threadTransactions = Map[String, Transaction]()
 
   def findOne[T >: Null : ClassTag]( id: Any): Option[T] =  {
 
