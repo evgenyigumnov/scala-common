@@ -1,5 +1,5 @@
 # scala-common
-Common Scala Library
+Common Scala Library: JSON, ORM and WebServer (MVC, Rest)
 
     libraryDependencies += "com.igumnov.scala" % "scala-common_2.11" % "0.5"
 
