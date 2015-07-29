@@ -6,6 +6,7 @@ import com.igumnov.common.orm.Transaction
 import com.igumnov.common.{ORM =>JavaORM}
 import com.igumnov.scala.orm.Id
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.Map
 import scala.reflect._
 
 import scala.reflect.ClassTag
@@ -15,14 +16,16 @@ import scala.reflect.ClassTag
 object ORM {
   JavaORM.setIdClass(classOf[Id])
 
-  //TODO It is not thread safe :( need to fix
   var threadTransactions = Map[String, Transaction]()
 
   def findOne[T >: Null : ClassTag]( id: Any): Option[T] =  {
 
     val className = classTag[T].runtimeClass
     val threadName = Thread.currentThread().getName
-    val transaction = threadTransactions.get(threadName)
+    var transaction:Option[Transaction] = null
+    threadTransactions.synchronized {
+      transaction = threadTransactions.get(threadName)
+    }
     var ret:AnyRef = null
     if(transaction.isDefined) {
       ret = transaction.get.findOne(className, id)
@@ -40,7 +43,10 @@ object ORM {
 
     val className = classTag[T].runtimeClass
     val threadName = Thread.currentThread().getName
-    val transaction = threadTransactions.get(threadName)
+    var transaction:Option[Transaction] = null
+    threadTransactions.synchronized {
+      transaction = threadTransactions.get(threadName)
+    }
     var ret:util.ArrayList[AnyRef] = null
     if(transaction.isDefined) {
       ret = transaction.get.findAll(className)
@@ -60,7 +66,10 @@ object ORM {
 
     val className = classTag[T].runtimeClass
     val threadName = Thread.currentThread().getName
-    val transaction = threadTransactions.get(threadName)
+    var transaction:Option[Transaction] = null
+    threadTransactions.synchronized {
+      transaction = threadTransactions.get(threadName)
+    }
     var ret:util.ArrayList[AnyRef] = null
     var javaParams = ArrayBuffer[AnyRef]()
 
@@ -87,18 +96,25 @@ object ORM {
     val threadName = Thread.currentThread().getName
     try {
       val transaction = JavaORM.beginTransaction()
-      threadTransactions += threadName -> transaction
+      threadTransactions.synchronized {
+        threadTransactions += threadName -> transaction
+      }
       t
       transaction.commit()
     } finally {
-      threadTransactions-threadName
+      threadTransactions.synchronized {
+        threadTransactions - threadName
+      }
     }
   }
 
 
   def update[T](obj: Any): T ={
     val threadName = Thread.currentThread().getName
-    val transaction = threadTransactions.get(threadName)
+    var transaction:Option[Transaction] = null
+    threadTransactions.synchronized {
+      transaction = threadTransactions.get(threadName)
+    }
     if(transaction.isDefined) {
       transaction.get.update(obj).asInstanceOf[T]
     } else {
@@ -109,7 +125,10 @@ object ORM {
 
   def insert[T](obj: Any): T ={
     val threadName = Thread.currentThread().getName
-    val transaction = threadTransactions.get(threadName)
+    var transaction:Option[Transaction] = null
+    threadTransactions.synchronized {
+      transaction = threadTransactions.get(threadName)
+    }
     if(transaction.isDefined) {
       transaction.get.insert(obj).asInstanceOf[T]
     } else {
@@ -119,7 +138,10 @@ object ORM {
 
   def delete[T](obj: Any): Int ={
     val threadName = Thread.currentThread().getName
-    val transaction = threadTransactions.get(threadName)
+    var transaction:Option[Transaction] = null
+    threadTransactions.synchronized {
+      transaction = threadTransactions.get(threadName)
+    }
     if(transaction.isDefined) {
       transaction.get.delete(obj)
     } else {
