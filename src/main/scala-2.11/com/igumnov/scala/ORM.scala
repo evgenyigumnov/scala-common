@@ -15,6 +15,7 @@ import scala.reflect.ClassTag
 object ORM {
   JavaORM.setIdClass(classOf[Id])
 
+  //TODO It is not thread safe :( need to fix
   var threadTransactions = Map[String, Transaction]()
 
   def findOne[T >: Null : ClassTag]( id: Any): Option[T] =  {
