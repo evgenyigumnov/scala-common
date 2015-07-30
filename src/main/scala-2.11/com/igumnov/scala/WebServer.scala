@@ -347,13 +347,8 @@ object WebServer {
 
   def getMessage(request: HttpServletRequest, response: HttpServletResponse, messageKey: String, params: Option[List[String]]): String = {
     val resolver: MessageResolver = resolvers.get.get(localeInterceptor.get.apply(request, response)).get
-    if (params.isDefined) {
-      val messageParameters: Array[AnyRef] = params.get.toArray
-      resolver.resolveMessage(null, messageKey, messageParameters).getResolvedMessage
-    } else {
-      resolver.resolveMessage(null, messageKey, null).getResolvedMessage
-
-    }
+    val messageParameters: Array[AnyRef] = params.getOrElse(List[String]()).toArray
+    resolver.resolveMessage(null, messageKey, messageParameters).getResolvedMessage
   }
 
   def templates(folder: String, cacheTTL: Double) = {
